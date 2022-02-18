@@ -1,4 +1,4 @@
-/* Ex2 (ex1 from threads) from first lab: allocate mem with mmap, read only and
+/* Ex2 (ex1 from threads) from first lab1: allocate mem with mmap, read only and
  * try to access it use a sig heandler to catch the "segfault" signal and
  * change the permision for the memory
  * ----thread----

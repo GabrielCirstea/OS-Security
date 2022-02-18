@@ -35,6 +35,8 @@ int make_sigaction()
 	return 0;
 }
 
+// a simple thread function that waits and exits
+// @arg - thread number/ID
 void *thread_func(void *arg)
 {
 	int nr = *(int*)arg;
@@ -51,13 +53,17 @@ int main()
 	make_sigaction();
 	const int t_nr = 3;
 	pthread_t *tids = malloc(t_nr * sizeof(*tids));
-	int nums[] = {1, 2, 3, 4};
+	int nums[] = {1, 2, 3, 4};		// a little cheat for the thread create part
 	if(!tids)
 		errExit("malloc");
 	for(int i=0; i<t_nr; ++i) {
+		// the last argument of the function is the thread number
+		// cannot send 'i', it will be overwriten by the next for iteration if
+		// the thread isn't fast
 		if(pthread_create(&tids[i], NULL, thread_func, &nums[i]))
 			errExit("pthread_create");
 	}
+	// wait for the threads to start and send a signal to one of them
 	sleep(1);
 	pthread_kill(tids[1], SIGINT);
 
