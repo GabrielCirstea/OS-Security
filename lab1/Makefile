@@ -4,7 +4,7 @@ SRC := src
 LIB := lib
 OBJ := obj
 DIRS=$(OBJ)
-EXE=ex2 catch_sig
+EXE=ex1 ex2 catch_sig
 
 SOURCES := $(wildcard $(SRC)/*.c, $(SRC)/week*/*.c)
 OBJECTS := $(patsubst $(SRC)/%.c, $(OBJ)/%.o, $(SOURCES))
@@ -23,7 +23,7 @@ catch_sig: catch_sig.c
 # EXE
 
 # dirs
-$(OBJ)/%/:
+$(OBJ):
 	mkdir $@
 
 # objects
