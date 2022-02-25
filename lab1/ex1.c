@@ -3,7 +3,7 @@
  * - objdump -h ex1 */
 #include <stdio.h>
 
-int g_a;	// .data if 0 else .bss
+int g_a = 1;	// .data if !0 else .bss
 int main()
 {
 	const int a = 1;	// .rodata

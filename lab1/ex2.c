@@ -70,6 +70,7 @@ int main()
 		perror("pthread_create");
 		exit(1);
 	}
+	sleep(1);
 	printf("tid: %ld\n", tid);
 
 	// test the memory write permision
