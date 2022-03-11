@@ -31,7 +31,10 @@ int main()
 
 	pthread_join(thr1, NULL);
 	pthread_join(thr2, NULL);
+
+	// with a perfect deadlock this will never be done
 	pthread_mutex_destroy(&mtx[0]);
 	pthread_mutex_destroy(&mtx[1]);
+	pthread_barrier_destroy(&barrier);
 	return 0;
 }
