@@ -26,7 +26,7 @@ static void func(int sockfd)
 		exit(1);
 	}
 
-	// replace stdout wit sockfd
+	// replace stdout with sockfd
 	if(dup2(sockfd, 1) == -1) {
 		perror("dup2 sockfd");
 		exit(1);
@@ -60,7 +60,7 @@ static void func(int sockfd)
 	printf("stdout back to normal\n");
 	fprintf(stderr, "stderr back to normal\n");
 } 
-  
+ 
 static int connect_to_server() 
 { 
     int sockfd, connfd; 
