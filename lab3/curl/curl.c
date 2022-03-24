@@ -19,7 +19,7 @@ int main()
   
   curl = curl_easy_init();
   if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, "https://www.bing.com/search?q=romania+ungaria");
+    curl_easy_setopt(curl, CURLOPT_URL, "https://gabriel-site.bitbucket.io");
  
 f = fopen("tmp.txt", "w+");
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
