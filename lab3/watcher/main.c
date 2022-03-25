@@ -162,29 +162,49 @@ int is_dir(const char *name)
   return 0;
 }
 
-unsigned long get_file_size(const char* file)
+int add_new_watcher(int fd, struct static_vec *wfds, const char *path)
 {
-  struct stat st;
-  if(stat(file, &st) == -1) {
-    perror("stat");
-    exit(1);
-  }
-  return st.st_size;
+	if(!path || !wfds) {
+		return -1;
+	}
+	int wd = inotify_add_watch( fd, path, IN_ACCESS | IN_CREATE | IN_MODIFY);
+	int n = wfds->len++;
+	wfds->files[n].count = wd;
+	strncpy(wfds->files[n].name, path, PATH_MAX);
+	fprintf(stderr, "New wathcer for %s, wd: %d\n", path, wd);
+	return 0;
 }
 
-/* Check if the file is recognized as a thread and remove it */
-int check_n_remove(const char* f_path)
+int remove_watcher(int fd, struct static_vec *wfds, int wd)
 {
-	// magic number: 200 - The new version of API return something and I'm not
-	// gonna parse JSON
-	if(get_file_size("tmp_hash.txt") > 200 ) {
-		printf("VIRUS DETECTED!!!: %s\n", f_path);
-		if(remove(f_path) == -1) {
-			fprintf(stderr, "Cannot remove the virus: %s\n", f_path);
-			perror("remove");
-			return -1;
+	for(int i=0; i<wfds->len; ++i){
+		if(wfds->files[i].count == wd) {
+			fprintf(stderr, "Removing watcher on: %s\n", wfds->files[i].name);
+			int n = wfds->len;
+			inotify_rm_watch(fd, wd );
+			wfds->files[i].count = wfds->files[n-1].count;
+			strncpy(wfds->files[i].name, wfds->files[n-1].name, PATH_MAX);
+			wfds->len--;
+			return 0;
 		}
-		printf("Virus removed :)\n");
+	}
+	return -1;
+}
+
+char *get_wd_path(struct static_vec *wfds, int wd)
+{
+  for(int i=0; i<wfds->len; ++i) {
+    if(wfds->files[i].count == wd) {
+      return wfds->files[i].name;
+    }
+  }
+  return NULL;
+}
+
+int rm_watchers(int fd, struct static_vec *wfds)
+{
+	for(int i=0; i<wfds->len; ++i) {
+		inotify_rm_watch( fd, wfds->files[i].count);
 	}
 	return 0;
 }
@@ -192,10 +212,12 @@ int check_n_remove(const char* f_path)
 int main(int argc, char** argv)
 {
   int length, i = 0;
-  int fd, wd;
+  int fd;
   char buffer[EVENT_BUF_LEN];
   struct static_vec fls;
+  struct static_vec wfds;	// watchers
   static_vec_init(&fls);
+  static_vec_init(&wfds);
   signal(SIGINT, sgn_handl);
   if (argc < 2) {
     fprintf(stderr, "Please provide a directory to watch on\n"
@@ -219,7 +241,7 @@ int main(int argc, char** argv)
     exit(1);
   }
 
-  wd = inotify_add_watch( fd, argv[1], IN_ACCESS | IN_CREATE | IN_MODIFY);
+  add_new_watcher(fd, &wfds, argv[1]);
 
   /*read to determine the event change happens on dir_name directory. Actually
    * this read blocks until the change event occurs*/ 
@@ -237,30 +259,38 @@ int main(int argc, char** argv)
     while ( i < length ) {     
       struct inotify_event *event = ( struct inotify_event * ) &buffer[ i ];
       if ( event->len ) {
-			// remove the watcher to don't count our own file read
-			inotify_rm_watch(fd, wd);
-			count_file(event, &fls);
+			char *dir_path = get_wd_path(&wfds, event->wd);
 			char f_path[PATH_MAX];
-			snprintf(f_path, PATH_MAX-1, "%s/%s", argv[1], event->name);
+			snprintf(f_path, PATH_MAX-1, "%s/%s", dir_path, event->name);
+			printf("main total path: %s\n", f_path);
+			// remove the watcher to don't count our own file read
+			// inotify_rm_watch(fd, event->wd);
+			remove_watcher(fd, &wfds, event->wd);
+			count_file(event, &fls);
 			char *hash = quick_sha(f_path);
 			if(hash) {
 				printf("%s hash: %s\n", event->name, hash);
-				virus_total_api(hash);
+				if(virus_total_api(hash)) {
+					printf("VIRUSE DETECTED: %s\n", f_path);
+					remove(f_path);
+				}
 				free(hash);
 			}
 			// put back the watcher
-			wd = inotify_add_watch( fd, argv[1], IN_ACCESS | IN_CREATE | IN_MODIFY);
+			add_new_watcher(fd, &wfds, dir_path);
+			if ( event->mask & IN_ISDIR ) {
+				add_new_watcher(fd, &wfds, f_path);
+			}
       }
       i += EVENT_SIZE + event->len;
     }
   }while(do_run);
   /*removing the “/tmp” directory from the watch list.*/
-  inotify_rm_watch( fd, wd );
+  // inotify_rm_watch( fd, wd );
 
   /*closing the INOTIFY instance*/
   close( fd );
 
   printf("The files:\n");
   print_files(&fls);
-
 }

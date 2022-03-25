@@ -1,34 +1,65 @@
+/* Do the API call with libcurl and check if the response indicate a virus */
 #include <curl/curl.h>
+#include <string.h>
+#include <stdlib.h>
+#define MULT 10 * 4096
+
+struct content_data {
+	int size;
+	char *data;
+};
 
 size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
-	size_t n = fwrite(ptr, size, nmemb, (FILE *) userdata);
-	fprintf(stderr, "curl fwrite: n = %ld\n", n);
-	return n;
+	struct content_data *cont = userdata;
+	int realsize = size * nmemb;
+	char *tmp = realloc(cont->data, cont->size + realsize + 1);
+	if(tmp == NULL)
+		return 0;  /* out of memory! */
+	cont->data = tmp;
+	memcpy(&(cont->data[cont->size]), ptr, realsize);
+	cont->size += realsize;
+	cont->data[cont->size - 1] = 0;
+
+	return realsize;
 }
 
+int check_virus(const char *data)
+{
+	if(strstr(data, "malicious") != NULL) {
+		return 1;
+	}
+	if(strstr(data, "harmless") != NULL) {
+		return 1;
+	}
+	return 0;
+}
  
+/* Call the damn API and cehck if we have a evil file in hands
+ * @return 1 if evil file, 0 if not */
 int virus_total_api(char* hash)
 {
 	CURL *curl;
 	CURLcode res;
-	FILE * f = NULL; 
+	struct content_data content;
 	char url[1024];
 	char api_url[] = "https://www.virustotal.com/api/v3/search";
+	char virus_detected = 0;
 
 	if(!hash) {
 		return 1;
 	}
 	snprintf(url, 1023, "%s?query=%s", api_url, hash);
-	printf("curl url = %s\n", url);
+	// printf("curl url = %s\n", url);
 
 	curl = curl_easy_init();
 	if(curl) {
 		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "GET");
 		curl_easy_setopt(curl, CURLOPT_URL, url);
 
-		f = fopen("tmp_hash.txt", "w+");
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+		content.data = NULL;
+		content.size = 0;
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &content);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
 
 		// for API v3, directly from virustotal API docs
@@ -45,11 +76,13 @@ int virus_total_api(char* hash)
 			fprintf(stderr, "curl_easy_perform() failed: %s\n",
 		curl_easy_strerror(res));
 
+		virus_detected = check_virus(content.data);
+
 		/* always cleanup */ 
 		curl_easy_cleanup(curl);
-		fclose(f);
+		free(content.data);
 	} else {
 		perror("curl init");
 	}
-	return 0;
+	return (int)virus_detected;
 }
