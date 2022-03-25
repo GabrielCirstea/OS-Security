@@ -1,4 +1,5 @@
-/*This is the sample program to notify us for the file creation and file deletion takes place in “/tmp” directory*/
+/* The guardian that will watch over the files and will protect the user agains
+ * evile ones */
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -11,10 +12,14 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include "sha-256.h"
+#include "curl.h"
 
 #define EVENT_SIZE  ( sizeof (struct inotify_event) )
 #define EVENT_BUF_LEN     ( 1024 * ( EVENT_SIZE + 16 ) )
 
+/* Get the sha256 hash of a file
+ * @file - the path to file
+ * @return - jash as string, or NULL if fail */
 char* quick_sha(const char* file)
 {
 	FILE * f = NULL;
@@ -42,7 +47,7 @@ char* quick_sha(const char* file)
 
 	while( ( i = fread( buf, 1, sizeof( buf ), f ) ) > 0 )
 	{
-		sha256_update( &ctx, buf, i );
+		sha256_update( &ctx, (uint8_t *)buf, i );
 	}
 
 	sha256_finish( &ctx, sha256sum );
@@ -157,6 +162,33 @@ int is_dir(const char *name)
   return 0;
 }
 
+unsigned long get_file_size(const char* file)
+{
+  struct stat st;
+  if(stat(file, &st) == -1) {
+    perror("stat");
+    exit(1);
+  }
+  return st.st_size;
+}
+
+/* Check if the file is recognized as a thread and remove it */
+int check_n_remove(const char* f_path)
+{
+	// magic number: 200 - The new version of API return something and I'm not
+	// gonna parse JSON
+	if(get_file_size("tmp_hash.txt") > 200 ) {
+		printf("VIRUS DETECTED!!!: %s\n", f_path);
+		if(remove(f_path) == -1) {
+			fprintf(stderr, "Cannot remove the virus: %s\n", f_path);
+			perror("remove");
+			return -1;
+		}
+		printf("Virus removed :)\n");
+	}
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
   int length, i = 0;
@@ -205,13 +237,18 @@ int main(int argc, char** argv)
     while ( i < length ) {     
       struct inotify_event *event = ( struct inotify_event * ) &buffer[ i ];
       if ( event->len ) {
+			// remove the watcher to don't count our own file read
 			inotify_rm_watch(fd, wd);
 			count_file(event, &fls);
-			char *hash = quick_sha(event->name);
+			char f_path[PATH_MAX];
+			snprintf(f_path, PATH_MAX-1, "%s/%s", argv[1], event->name);
+			char *hash = quick_sha(f_path);
 			if(hash) {
 				printf("%s hash: %s\n", event->name, hash);
+				virus_total_api(hash);
 				free(hash);
 			}
+			// put back the watcher
 			wd = inotify_add_watch( fd, argv[1], IN_ACCESS | IN_CREATE | IN_MODIFY);
       }
       i += EVENT_SIZE + event->len;
