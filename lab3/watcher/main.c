@@ -162,12 +162,18 @@ int is_dir(const char *name)
   return 0;
 }
 
+/* Add a new watcher for the fd notifier
+ * @fd - file descritpor for inotify
+ * @wfds - static vector for watchers fds
+ * @path - path to file
+ * @reutrn - only 0 on succes */
 int add_new_watcher(int fd, struct static_vec *wfds, const char *path)
 {
 	if(!path || !wfds) {
 		return -1;
 	}
-	int wd = inotify_add_watch( fd, path, IN_ACCESS | IN_CREATE | IN_MODIFY);
+	int wd = inotify_add_watch( fd, path,
+			IN_ACCESS | IN_CREATE | IN_MODIFY | IN_DELETE);
 	int n = wfds->len++;
 	wfds->files[n].count = wd;
 	strncpy(wfds->files[n].name, path, PATH_MAX);
@@ -175,6 +181,11 @@ int add_new_watcher(int fd, struct static_vec *wfds, const char *path)
 	return 0;
 }
 
+/* Remove a watcher from inotify
+ * @fd - file descritpor for inotify
+ * @wfds - static vector for watchers fds
+ * @wd - watcher to remove
+ * @return - 0 on success, -1 on fail */
 int remove_watcher(int fd, struct static_vec *wfds, int wd)
 {
 	for(int i=0; i<wfds->len; ++i){
@@ -186,6 +197,41 @@ int remove_watcher(int fd, struct static_vec *wfds, int wd)
 			strncpy(wfds->files[i].name, wfds->files[n-1].name, PATH_MAX);
 			wfds->len--;
 			return 0;
+		}
+	}
+	return -1;
+}
+
+/* Pause the watcher, it just removes the watchers but deos not alter the state
+ * of the data structure
+ * @fd - file descritpor for inotify
+ * @wfds - static vector for watchers fds
+ * @wd - watcher to suspend
+ * @return - 0 on success, -1 on fail */
+int pause_watcher(int fd, struct static_vec *wfds, int wd)
+{
+	for(int i=0; i<wfds->len; ++i){
+		if(wfds->files[i].count == wd) {
+			inotify_rm_watch(fd, wd );
+			return 0;
+		}
+	}
+	return -1;
+}
+
+/* Resume a suspended watcher, just create other wathcer on the place the old one
+ * was stored. Does not alter the state of the data structure
+ * @fd - file descritpor for inotify
+ * @wfds - static vector for watchers fds
+ * @wd - watcher to resume
+ * @return - new wd on success, -1 on fail */
+int resume_watcher(int fd, struct static_vec *wfds, int wd)
+{
+	for(int i=0; i<wfds->len; ++i){
+		if(wfds->files[i].count == wd) {
+			int wd = inotify_add_watch( fd, wfds->files[i].name, IN_ACCESS | IN_CREATE | IN_MODIFY);
+			wfds->files[i].count = wd;
+			return wd;
 		}
 	}
 	return -1;
@@ -265,10 +311,10 @@ int main(int argc, char** argv)
 			printf("main total path: %s\n", f_path);
 			// remove the watcher to don't count our own file read
 			// inotify_rm_watch(fd, event->wd);
-			remove_watcher(fd, &wfds, event->wd);
+			pause_watcher(fd, &wfds, event->wd);
 			count_file(event, &fls);
 			char *hash = quick_sha(f_path);
-			if(hash) {
+			if((event->mask & IN_MODIFY) && hash) {
 				printf("%s hash: %s\n", event->name, hash);
 				if(virus_total_api(hash)) {
 					printf("VIRUSE DETECTED: %s\n", f_path);
@@ -277,16 +323,19 @@ int main(int argc, char** argv)
 				free(hash);
 			}
 			// put back the watcher
-			add_new_watcher(fd, &wfds, dir_path);
-			if ( event->mask & IN_ISDIR ) {
+			resume_watcher(fd, &wfds, event->wd);
+			if ( (event->mask & IN_ISDIR) && (event->mask & IN_CREATE) ) {
 				add_new_watcher(fd, &wfds, f_path);
+			}
+			// still not removing the watcher on rmdir
+			if ( (event->mask & IN_ISDIR) && (event->mask & IN_DELETE ) ) {
+				fprintf(stderr, "Got to remove wd: %d\n", event->wd);
+				remove_watcher(fd, &wfds, event->wd);
 			}
       }
       i += EVENT_SIZE + event->len;
     }
   }while(do_run);
-  /*removing the “/tmp” directory from the watch list.*/
-  // inotify_rm_watch( fd, wd );
 
   /*closing the INOTIFY instance*/
   close( fd );

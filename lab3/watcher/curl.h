@@ -26,10 +26,10 @@ size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata)
 
 int check_virus(const char *data)
 {
-	if(strstr(data, "malicious") != NULL) {
+	if(strstr(data, "\"malicious\",\n") != NULL) {
 		return 1;
 	}
-	if(strstr(data, "harmless") != NULL) {
+	if(strstr(data, "\"harmless\",\n") != NULL) {
 		return 1;
 	}
 	return 0;
@@ -66,7 +66,7 @@ int virus_total_api(char* hash)
 		struct curl_slist *headers = NULL;
 		headers = curl_slist_append(headers, "Accept: application/json");
 		headers = curl_slist_append(headers, "x-apikey: "
-				"<key>");
+				"03d23fe2e7dd6ec125e7f534318341c8ad07a18b39f59b4caf4d10e523e3856e");
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 		/* Perform the request, res will get the return code */ 
@@ -76,6 +76,11 @@ int virus_total_api(char* hash)
 			fprintf(stderr, "curl_easy_perform() failed: %s\n",
 		curl_easy_strerror(res));
 
+		// ugly solution for '\0' in the middle of the string
+		for(int i=0; i<content.size-1; ++i) {
+			if(content.data[i] == 0)
+				content.data[i] = '.';
+		}
 		virus_detected = check_virus(content.data);
 
 		/* always cleanup */ 
