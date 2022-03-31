@@ -314,7 +314,8 @@ int main(int argc, char** argv)
 			pause_watcher(fd, &wfds, event->wd);
 			count_file(event, &fls);
 			char *hash = quick_sha(f_path);
-			if((event->mask & IN_MODIFY) && hash) {
+			if(((event->mask & IN_MODIFY) || (event->mask & IN_CREATE))
+				   	&& hash) {
 				printf("%s hash: %s\n", event->name, hash);
 				if(virus_total_api(hash)) {
 					printf("VIRUSE DETECTED: %s\n", f_path);
@@ -324,13 +325,14 @@ int main(int argc, char** argv)
 			}
 			// put back the watcher
 			resume_watcher(fd, &wfds, event->wd);
-			if ( (event->mask & IN_ISDIR) && (event->mask & IN_CREATE) ) {
-				add_new_watcher(fd, &wfds, f_path);
-			}
-			// still not removing the watcher on rmdir
-			if ( (event->mask & IN_ISDIR) && (event->mask & IN_DELETE ) ) {
-				fprintf(stderr, "Got to remove wd: %d\n", event->wd);
-				remove_watcher(fd, &wfds, event->wd);
+			if ( (event->mask & IN_ISDIR) ) {
+				if (event->mask & IN_CREATE)
+					add_new_watcher(fd, &wfds, f_path);
+				if (event->mask & IN_DELETE) {
+					fprintf(stderr, "Got to remove wd: %d\n", event->wd);
+					remove_watcher(fd, &wfds, event->wd);
+				}
+
 			}
       }
       i += EVENT_SIZE + event->len;

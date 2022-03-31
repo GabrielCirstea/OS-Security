@@ -26,10 +26,15 @@ size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata)
 
 int check_virus(const char *data)
 {
-	if(strstr(data, "\"malicious\",\n") != NULL) {
-		return 1;
+	char *p = NULL, *start = NULL, *stop = NULL;
+	if((start = strstr(data, "\"last_analysis_results\"")) == NULL) {
+		return 0;
 	}
-	if(strstr(data, "\"harmless\",\n") != NULL) {
+	stop = strstr(start, "\"sandbox_verdicts\":");
+	if(stop)
+		*stop = 0;
+	if((p = strstr(start, "\"category\": \"malicious\",\n")) != NULL){
+		// printf(" VIRUTS at %s\n", data);
 		return 1;
 	}
 	return 0;
