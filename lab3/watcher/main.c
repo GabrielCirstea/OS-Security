@@ -37,7 +37,8 @@ char* quick_sha(const char* file)
 
 	if( ! ( f = fopen( file, "rb" ) ) )
 	{
-		perror( "fopen" );
+		fprintf(stderr, "%s %d - fopen file %s\n", __FILE__, __LINE__, file);
+		perror( "hash fopen" );
 		free(hash);
 		return NULL;
 	}
@@ -173,7 +174,7 @@ int add_new_watcher(int fd, struct static_vec *wfds, const char *path)
 		return -1;
 	}
 	int wd = inotify_add_watch( fd, path,
-			IN_ACCESS | IN_CREATE | IN_MODIFY | IN_DELETE);
+			IN_ACCESS | IN_CREATE | IN_MODIFY | IN_CLOSE_WRITE);
 	int n = wfds->len++;
 	wfds->files[n].count = wd;
 	strncpy(wfds->files[n].name, path, PATH_MAX);
@@ -229,7 +230,8 @@ int resume_watcher(int fd, struct static_vec *wfds, int wd)
 {
 	for(int i=0; i<wfds->len; ++i){
 		if(wfds->files[i].count == wd) {
-			int wd = inotify_add_watch( fd, wfds->files[i].name, IN_ACCESS | IN_CREATE | IN_MODIFY);
+			int wd = inotify_add_watch( fd, wfds->files[i].name, IN_ACCESS |
+					IN_CREATE | IN_MODIFY | IN_CLOSE_WRITE);
 			wfds->files[i].count = wd;
 			return wd;
 		}
@@ -314,8 +316,7 @@ int main(int argc, char** argv)
 			pause_watcher(fd, &wfds, event->wd);
 			count_file(event, &fls);
 			char *hash = quick_sha(f_path);
-			if(((event->mask & IN_MODIFY) || (event->mask & IN_CREATE))
-				   	&& hash) {
+			if(hash) {
 				printf("%s hash: %s\n", event->name, hash);
 				if(virus_total_api(hash)) {
 					printf("VIRUSE DETECTED: %s\n", f_path);
