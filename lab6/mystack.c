@@ -1,15 +1,15 @@
 #include <string.h>
 #include <unistd.h>
 
-// int sw = 10;
+int sw = 10;
 
 int func(char * argv)
 {
-	// while (sw)
-	// {
-		// sleep(1);
-		// sw--;
-	// }
+	while (sw)
+	{
+		sleep(1);
+		sw--;
+	}
 	char buffer[32];
 	strcpy(buffer, argv);
 	return 0;
