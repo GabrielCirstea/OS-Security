@@ -67,6 +67,43 @@ EBP: 0xffffcfd8 --> 0xffffcff8 --> 0x0
 $1 = (char (*)[32]) 0xffffcfb0
 ```
 
+## Target
+
+THe purpose is to find the address of the EBP and `buffer`, compute the difference
+between them, to know how much the payload needs to be and overwrite this addresses.
+
+The memory layout is ass fallows:
+
+```
+	return address
+		old EDP
+	calle registers
+		buffer
+```
+
+What we want is the overwrite the "return address" whit "buffer" address.
+But we have to keep the same EDP
+
+If compiled for 32 bit architecture, the difference between the EDB and buffer
+should be 0x28 which is 40 in hex. 32 of which is our buffer, so there are 8
+bytes left to overwrite.
+
+The "exec.sh" script is calling the `mys` program with the payload:
+
+* the shell code
+* a 7 bytes padding to fill up all 32 bytes of the buffer array
+
+Next, we take the addreses of the EDB and buffer and append them to the payload.
+The addresses have to be in hex, and because of the way bytes are stored in memory
+we write them from write to left.
+
+If the EDP address is "0xffffcfd8" then we write: "\xd8\xcf\xff\xff"
+
+
+__________
+
+Caution, bad notes ahead:
+
 ### Values
 
 first run:
